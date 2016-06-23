@@ -73,7 +73,7 @@ func createCustomer(writer http.ResponseWriter, request *http.Request, params ht
 	writer.Header().Set("Content-Type", "applications/json")
 	writer.WriteHeader(201)
 	response, _ := json.Marshal(&customer)
-	fmt.Fprintf(writer, "%s", response)
+	fmt.Fprintf(writer, "%s\n", response)
 }
 
 func getCustomer(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
@@ -85,7 +85,7 @@ func getCustomer(writer http.ResponseWriter, request *http.Request, params httpr
 	err := customerCol.Find(bson.M{"email": email}).One(&customer)
 	if err != nil {
 		writer.WriteHeader(404)
-		fmt.Fprintf(writer, "Customer does not exist")
+		fmt.Fprintf(writer, "Customer does not exist\n")
 		return
 	}
 
@@ -93,7 +93,7 @@ func getCustomer(writer http.ResponseWriter, request *http.Request, params httpr
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(200)
 	response, _ := json.Marshal(&customer)
-	fmt.Fprintf(writer, "%s", response)
+	fmt.Fprintf(writer, "%s\n", response)
 }
 
 func deleteCustomer(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
@@ -124,7 +124,7 @@ func createCertificate(writer http.ResponseWriter, request *http.Request, params
 	// make sure the customer email exists in customer collections
 	if !doesCustomerExist(certificate.Email) {
 		writer.WriteHeader(404)
-		fmt.Fprintf(writer, "Customer does not exist")
+		fmt.Fprintf(writer, "Customer does not exist\n")
 		return
 	}
 
@@ -136,7 +136,7 @@ func createCertificate(writer http.ResponseWriter, request *http.Request, params
 	writer.Header().Set("Content-Type", "applications/json")
 	writer.WriteHeader(201)
 	response, _ := json.Marshal(&certificate)
-	fmt.Fprintf(writer, "%s", response)
+	fmt.Fprintf(writer, "%s\n", response)
 }
 
 func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
@@ -146,7 +146,7 @@ func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, 
 	// if client does not exist, return 404
 	if !doesCustomerExist(email) {
 		writer.WriteHeader(404)
-		fmt.Fprintf(writer, "Customer does not exist")
+		fmt.Fprintf(writer, "Customer does not exist\n")
 		return
 	}
 
@@ -156,7 +156,7 @@ func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, 
 	err := certificateCol.Find(bson.M{"email": email}).All(&certificates)
 	if err != nil && err != mgo.ErrNotFound {
 		writer.WriteHeader(500)
-		fmt.Fprintf(writer, "Error looking up customer certificates")
+		fmt.Fprintf(writer, "Error looking up customer certificates\n")
 		return
 	}
 
@@ -164,7 +164,7 @@ func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, 
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(200)
 	response, _ := json.Marshal(&certificates)
-	fmt.Fprintf(writer, "%s", response)
+	fmt.Fprintf(writer, "%s\n", response)
 }
 
 func updateCertificate(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
