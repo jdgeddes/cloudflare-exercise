@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 
@@ -26,52 +27,88 @@ type (
 )
 
 var (
-	database     *mgo.Database
-	databaseName = "customerdb"
+	customerCol    *mgo.Collection
+	certificateCol *mgo.Collection
 )
+
+//
+// Utility Functions
+//
+
+func doesCustomerExist(email string) bool {
+	// make sure the customer email exists in customer collection
+	count, _ := customerCol.Find(bson.M{"email": email}).Count()
+	if count == 0 {
+		return false
+	}
+
+	return true
+}
 
 //
 // Functions for creating, retrieving, and deleting customers
 //
 
-func createCustomer(writer http.ResponseWriter, request *http.Request, p httprouter.Params) {
+func createCustomer(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	// get customer information from the POST
 	customer := Customer{}
-
 	json.NewDecoder(request.Body).Decode(&customer)
 
-	database.C("customers").Insert(customer)
+	// if customer email exists, return error
+	if doesCustomerExist(customer.Email) {
+		writer.WriteHeader(400)
+		fmt.Fprintf(writer, "Customer with email exists.\n")
+		return
+	}
 
-	response, _ := json.Marshal(&customer)
+	// insert customer into database, on error return 500
+	err := customerCol.Insert(customer)
+	if err != nil {
+		writer.WriteHeader(500)
+		fmt.Fprintf(writer, "Error inserting customer into database.\n")
+		return
+	}
 
+	// respond with 201 and customer JSON information
 	writer.Header().Set("Content-Type", "applications/json")
 	writer.WriteHeader(201)
-	fmt.Fprintf(writer, "%s\n", response)
+	response, _ := json.Marshal(&customer)
+	fmt.Fprintf(writer, "%s", response)
 }
 
-func getCustomer(writer http.ResponseWriter, request *http.Request, p httprouter.Params) {
-	email := p.ByName("email")
+func getCustomer(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	// get email address from parmaters
+	email := params.ByName("email")
 
+	// lookup customer based on email, return 404 on not found
 	customer := Customer{}
-	err := database.C("customers").Find(bson.M{"email": email}).One(&customer)
+	err := customerCol.Find(bson.M{"email": email}).One(&customer)
 	if err != nil {
 		writer.WriteHeader(404)
+		fmt.Fprintf(writer, "Customer does not exist")
 		return
 	}
 
+	// respond with 200 and customer JSON information
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(200)
-	fmt.Fprintf(writer, "%s\n", customer)
+	response, _ := json.Marshal(&customer)
+	fmt.Fprintf(writer, "%s", response)
 }
 
-func deleteCustomer(writer http.ResponseWriter, request *http.Request, p httprouter.Params) {
-	email := p.ByName("email")
+func deleteCustomer(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	// get the email address from parameters
+	email := params.ByName("email")
 
-	err := database.C("customers").Remove(bson.M{"email": email})
+	// remove the customer by email, return 404 on not found
+	err := customerCol.Remove(bson.M{"email": email})
 	if err != nil {
 		writer.WriteHeader(404)
+		fmt.Fprintf(writer, "Customer does not exist.\n")
 		return
 	}
 
+	// respond with 200
 	writer.WriteHeader(200)
 }
 
@@ -79,89 +116,108 @@ func deleteCustomer(writer http.ResponseWriter, request *http.Request, p httprou
 // Functions for creating, updating, and print certficiates belonging to a customer
 //
 
-func createCertificate(writer http.ResponseWriter, request *http.Request, p httprouter.Params) {
+func createCertificate(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	// get certificate information from POST
 	certificate := Certificate{}
-
 	json.NewDecoder(request.Body).Decode(&certificate)
 
-	customer := Customer{}
-	err := database.C("customers").Find(bson.M{"email": certificate.Email}).One(&customer)
-	if err != nil {
-		fmt.Fprintf(writer, "no customer for %s\n", certificate.Email)
+	// make sure the customer email exists in customer collections
+	if !doesCustomerExist(certificate.Email) {
 		writer.WriteHeader(404)
+		fmt.Fprintf(writer, "Customer does not exist")
 		return
 	}
 
-	// create ID for certificate
+	// create ID for certificate and insert it
 	certificate.Id = bson.NewObjectId()
+	certificateCol.Insert(certificate)
 
-	database.C("certificates").Insert(certificate)
-
-	response, _ := json.Marshal(&certificate)
-
+	// return 201 with JSON certificate
 	writer.Header().Set("Content-Type", "applications/json")
 	writer.WriteHeader(201)
-	fmt.Fprintf(writer, "%s\n", response)
+	response, _ := json.Marshal(&certificate)
+	fmt.Fprintf(writer, "%s", response)
 }
 
-func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, p httprouter.Params) {
-	email := p.ByName("email")
+func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	// get email requested from parameters
+	email := params.ByName("email")
 
-	var certificates []Certificate
-	err := database.C("certificates").Find(bson.M{"email": email}).All(&certificates)
-	if err != nil {
+	// if client does not exist, return 404
+	if !doesCustomerExist(email) {
 		writer.WriteHeader(404)
+		fmt.Fprintf(writer, "Customer does not exist")
 		return
 	}
 
+	// lookup all certificates.  note we check if the error is the email wasn't found.
+	// possible for client to be created with no certificates
+	var certificates []Certificate
+	err := certificateCol.Find(bson.M{"email": email}).All(&certificates)
+	if err != nil && err != mgo.ErrNotFound {
+		writer.WriteHeader(500)
+		fmt.Fprintf(writer, "Error looking up customer certificates")
+		return
+	}
+
+	// respond with 200 and JSON of certificates
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(200)
-
-	for i := 0; i < len(certificates); i++ {
-		response, _ := json.Marshal(&certificates[i])
-		fmt.Fprintf(writer, "%s\n", response)
-	}
+	response, _ := json.Marshal(&certificates)
+	fmt.Fprintf(writer, "%s", response)
 }
 
-func updateCertificate(writer http.ResponseWriter, request *http.Request, p httprouter.Params) {
-	id := p.ByName("id")
-
+func updateCertificate(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	// get ID and check to make sure it's in the correct format
+	id := params.ByName("id")
 	if !bson.IsObjectIdHex(id) {
 		writer.WriteHeader(404)
+		fmt.Fprintf(writer, "Certificate not found.\n")
 		return
 	}
 	objectId := bson.ObjectIdHex(id)
 
+	// decode as certificate, but we're just interested in "active"
 	activeVal := Certificate{}
 	json.NewDecoder(request.Body).Decode(&activeVal)
 
+	// update the certificate based on object ID, updating the active field
 	query := bson.M{"id": objectId}
 	change := bson.M{"$set": bson.M{"active": activeVal.Active}}
-	err := database.C("certificates").Update(query, change)
+	err := certificateCol.Update(query, change)
 	if err != nil {
-		writer.WriteHeader(404)
+		writer.WriteHeader(500)
+		fmt.Fprintf(writer, "Error updating certificate.\n")
 		return
 	}
 
-	writer.Header().Set("Content-Type", "application/json")
+	// return code 200
 	writer.WriteHeader(200)
-	fmt.Fprintf(writer, "Success\n")
+	fmt.Fprintf(writer, "Succesfully updated certificate\n")
 }
 
 func main() {
-	fmt.Println("starting server")
+	// setup flags for database and server information
+	dbhostPtr := flag.String("dbhost", "localhost", "Hostname of Mongo DB server")
+	dbnamePtr := flag.String("dbname", "customerdb", "Database name to query and store customer information")
+	portPtr := flag.Int("port", 8080, "Port for the server to run on")
+	flag.Parse()
 
-	session, err := mgo.Dial("localhost")
+	// connect to mongo database
+	session, err := mgo.Dial(*dbhostPtr)
 	if err != nil {
 		panic(err)
 	}
 	defer session.Close()
 	session.SetMode(mgo.Monotonic, true)
 
-	database = session.DB(databaseName)
-	//database.DropDatabase()
+	// get collections for storing customers and certificates
+	customerCol = session.DB(*dbnamePtr).C("customers")
+	certificateCol = session.DB(*dbnamePtr).C("certificates")
 
+	// setup HTTP router for handling customer and certificate requests
 	r := httprouter.New()
+
 	r.POST("/customer", createCustomer)
 	r.GET("/customer/:email", getCustomer)
 	r.DELETE("/customer/:email", deleteCustomer)
@@ -170,5 +226,7 @@ func main() {
 	r.GET("/certificate/:email", getCustomerCertificates)
 	r.PUT("/certificate/:id", updateCertificate)
 
-	http.ListenAndServe(":8080", r)
+	// start HTTP server and port specified
+	address := fmt.Sprintf(":%d", *portPtr)
+	http.ListenAndServe(address, r)
 }
