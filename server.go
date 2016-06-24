@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -24,11 +25,17 @@ type (
 		Body       string        `json:"body" bson:"body"`
 		Active     bool          `json:"active" bson:"active"`
 	}
+
+	CertificateUpdate struct {
+		Id    string `json:"id" bson:"id"`
+		Email string `json:"email" bson:"email"`
+	}
 )
 
 var (
 	customerCol    *mgo.Collection
 	certificateCol *mgo.Collection
+	certhost       string = ""
 )
 
 //
@@ -108,8 +115,12 @@ func deleteCustomer(writer http.ResponseWriter, request *http.Request, params ht
 		return
 	}
 
+	// remove all certificates associated with the customer
+	err = certificateCol.Remove(bson.M{"email": email})
+
 	// respond with 200
 	writer.WriteHeader(200)
+	fmt.Fprintf(writer, "Successfuly deleted.\n")
 }
 
 //
@@ -150,10 +161,10 @@ func getCustomerCertificates(writer http.ResponseWriter, request *http.Request, 
 		return
 	}
 
-	// lookup all certificates.  note we check if the error is the email wasn't found.
-	// possible for client to be created with no certificates
+	// lookup all ACTIVE certificates.  note we check if the error is the
+	// email wasn't found. possible for client to be created with no certificates
 	var certificates []Certificate
-	err := certificateCol.Find(bson.M{"email": email}).All(&certificates)
+	err := certificateCol.Find(bson.M{"email": email, "active": true}).All(&certificates)
 	if err != nil && err != mgo.ErrNotFound {
 		writer.WriteHeader(500)
 		fmt.Fprintf(writer, "Error looking up customer certificates\n")
@@ -187,8 +198,21 @@ func updateCertificate(writer http.ResponseWriter, request *http.Request, params
 	err := certificateCol.Update(query, change)
 	if err != nil {
 		writer.WriteHeader(500)
-		fmt.Fprintf(writer, "Error updating certificate.\n")
+		fmt.Fprintf(writer, "Error updating certificate: %s.\n", err)
 		return
+	}
+
+	// if there is a certification change host set, notify them
+	if certhost != "" {
+		// create JSON notification
+		jsonPrep := fmt.Sprintf("`{id:\"%s\",active:%t}`", id, activeVal.Active)
+		var jsonStr = []byte(jsonPrep)
+		req, _ := http.NewRequest("POST", "http://"+certhost, bytes.NewBuffer(jsonStr))
+		req.Header.Set("Content-Type", "application/json")
+
+		// create client and send POST
+		client := &http.Client{}
+		client.Do(req)
 	}
 
 	// return code 200
@@ -200,8 +224,13 @@ func main() {
 	// setup flags for database and server information
 	dbhostPtr := flag.String("dbhost", "localhost", "Hostname of Mongo DB server")
 	dbnamePtr := flag.String("dbname", "customerdb", "Database name to query and store customer information")
+	certHostPtr := flag.String("certhost", "", "Hostname to notify via HTTP POST of certification activity change")
 	portPtr := flag.Int("port", 8080, "Port for the server to run on")
 	flag.Parse()
+
+	if *certHostPtr != "" {
+		certhost = *certHostPtr
+	}
 
 	// connect to mongo database
 	session, err := mgo.Dial(*dbhostPtr)
