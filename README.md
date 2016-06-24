@@ -1,5 +1,3 @@
-# Microservices exercise for CloudFlare
-
 ##Requirements
 
 
