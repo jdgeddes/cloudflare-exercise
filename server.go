@@ -25,11 +25,6 @@ type (
 		Body       string        `json:"body" bson:"body"`
 		Active     bool          `json:"active" bson:"active"`
 	}
-
-	CertificateUpdate struct {
-		Id    string `json:"id" bson:"id"`
-		Email string `json:"email" bson:"email"`
-	}
 )
 
 var (
