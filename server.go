@@ -35,7 +35,7 @@ type (
 var (
 	customerCol    *mgo.Collection
 	certificateCol *mgo.Collection
-	certhost       string = ""
+	certChangeUrl  string = ""
 )
 
 //
@@ -203,11 +203,11 @@ func updateCertificate(writer http.ResponseWriter, request *http.Request, params
 	}
 
 	// if there is a certification change host set, notify them
-	if certhost != "" {
+	if certChangeUrl != "" {
 		// create JSON notification
 		jsonPrep := fmt.Sprintf("`{id:\"%s\",active:%t}`", id, activeVal.Active)
 		var jsonStr = []byte(jsonPrep)
-		req, _ := http.NewRequest("POST", "http://"+certhost, bytes.NewBuffer(jsonStr))
+		req, _ := http.NewRequest("POST", certChangeUrl, bytes.NewBuffer(jsonStr))
 		req.Header.Set("Content-Type", "application/json")
 
 		// create client and send POST
@@ -224,12 +224,12 @@ func main() {
 	// setup flags for database and server information
 	dbhostPtr := flag.String("dbhost", "localhost", "Hostname of Mongo DB server")
 	dbnamePtr := flag.String("dbname", "customerdb", "Database name to query and store customer information")
-	certHostPtr := flag.String("certhost", "", "Hostname to notify via HTTP POST of certification activity change")
+	certChangeUrlPtr := flag.String("certurl", "", "URL to notify via HTTP POST of certification activity change")
 	portPtr := flag.Int("port", 8080, "Port for the server to run on")
 	flag.Parse()
 
-	if *certHostPtr != "" {
-		certhost = *certHostPtr
+	if *certChangeUrlPtr != "" {
+		certChangeUrl = *certChangeUrlPtr
 	}
 
 	// connect to mongo database
