@@ -66,9 +66,15 @@ To get a list of active certificates from customer with email `<EMAIL>`
 curl http://localhost:8080/certificate/<EMAIL>
 ```
 
-To activate/deactive certificate with id `<ID>`
+To activate certificate with id `<ID>`
 
 ```
-curl -XPUT -H 'Content-Type: application/json' -d '{"active":<true/false>}' http://localhost:8080/certificate/<ID>   
+curl -XPUT -H 'Content-Type: application/json' -d '{"active":true}' http://localhost:8080/certificate/<ID>   
+```
+
+To deactivate certificate with id `<ID>`
+
+```
+curl -XPUT -H 'Content-Type: application/json' -d '{"active":false}' http://localhost:8080/certificate/<ID>   
 ```
 
