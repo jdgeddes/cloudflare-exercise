@@ -60,13 +60,13 @@ To create a certificate for customer with email `<EMAIL>`, private key `<KEY>`, 
 curl -XPOST -H 'Content-Type: application/json' -d '{"email":"<EMAIL>", "key":"<KEY>", "body":"<BODY>", "active":<true/false>}' http://localhost:8080/certificate
 ```
 
-To get a list of active certificates from customer with email <EMAIL>
+To get a list of active certificates from customer with email `<EMAIL>`
 
 ```
 curl http://localhost:8080/certificate/<EMAIL>
 ```
 
-To activate/deactive certificate with id <ID>
+To activate/deactive certificate with id `<ID>`
 
 ```
 curl -XPUT -H 'Content-Type: application/json' -d '{"active":<true/false>}' http://localhost:8080/certificate/<ID>   
